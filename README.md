@@ -1,30 +1,125 @@
-# University registration dashboard
+# Dashboard Registrasi Universitas
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+Dashboard modern dan responsif untuk sistem registrasi mahasiswa universitas.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/andi-agung-s-projects/v0-university-registration-dashboard)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/6odx20NpFJw)
+## 🎯 Fitur Utama
 
-## Overview
+- **Registrasi Mahasiswa** - Formulir pendaftaran mahasiswa baru dengan pilihan program studi
+- **Generator Sapaan** - Pembuat sapaan personal untuk mahasiswa yang terdaftar
+- **Dashboard Responsif** - Tampilan yang optimal di semua perangkat
+- **UI/UX Modern** - Antarmuka yang bersih dan intuitif
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## 🛠️ Teknologi
 
-## Deployment
+- **Next.js 14** - Framework React untuk produksi
+- **TypeScript** - Type safety dan developer experience
+- **Tailwind CSS** - Styling yang efisien dan responsif
+- **Radix UI** - Komponen UI yang accessible
+- **Lucide React** - Icons modern dan konsisten
 
-Your project is live at:
+## 🚀 Instalasi
 
-**[https://vercel.com/andi-agung-s-projects/v0-university-registration-dashboard](https://vercel.com/andi-agung-s-projects/v0-university-registration-dashboard)**
+1. Clone repository:
+```bash
+git clone <repository-url>
+cd pasobis-fe
+```
 
-## Build your app
+2. Install dependencies:
+```bash
+npm install
+# atau
+pnpm install
+```
 
-Continue building your app on:
+3. Jalankan development server:
+```bash
+npm run dev
+# atau
+pnpm dev
+```
 
-**[https://v0.dev/chat/projects/6odx20NpFJw](https://v0.dev/chat/projects/6odx20NpFJw)**
+4. Buka [http://localhost:3000](http://localhost:3000) di browser
 
-## How It Works
+## 📱 Responsivitas
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+Dashboard ini dirancang untuk bekerja optimal di:
+- Desktop (1024px+)
+- Tablet (768px - 1023px)
+- Mobile (320px - 767px)
+
+## 🎨 Layout Terbaru
+
+### Perbaikan yang Dilakukan:
+- ✅ **Mengatasi overlapping elements** - Layout sidebar dan konten utama tidak lagi saling menimpa
+- ✅ **Responsivitas yang lebih baik** - Sidebar yang dapat di-collapse di mobile
+- ✅ **Struktur yang lebih bersih** - Mengurangi kompleksitas provider dan context
+- ✅ **Performance yang lebih baik** - Layout yang lebih efisien dengan less re-renders
+- ✅ **Accessibility** - Focus management dan keyboard navigation
+
+### Struktur Layout:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Header (Sticky)                        │
+├─────────────┬───────────────────────────────────────────────┤
+│             │                                               │
+│   Sidebar   │            Main Content                       │
+│  (Fixed)    │              (Scrollable)                     │
+│             │                                               │
+│             │  ┌─────────────────────────────────────────┐  │
+│             │  │              Card                       │  │
+│             │  │                                         │  │
+│             │  │         Form Content                    │  │
+│             │  │                                         │  │
+│             │  └─────────────────────────────────────────┘  │
+│             │                                               │
+└─────────────┴───────────────────────────────────────────────┘
+```
+
+## 🔧 Komponen
+
+### Layout Components:
+- **Sidebar Navigation** - Menu navigasi dengan state management
+- **Header** - Top bar dengan search dan user actions
+- **Main Content** - Area konten utama dengan card wrapper
+
+### Form Components:
+- **Student Registration Form** - Formulir registrasi mahasiswa
+- **Greeting Generator Form** - Generator sapaan personal
+
+## 📋 Development Notes
+
+### CSS Structure:
+- Base styles menggunakan Tailwind CSS variables
+- Custom utilities untuk scrollbar dan animations
+- Responsive breakpoints yang konsisten
+- Focus management untuk accessibility
+
+### State Management:
+- Local state dengan React hooks
+- Context API untuk sharing data antar komponen
+- Optimistic updates untuk better UX
+
+## 🎯 Roadmap
+
+- [ ] Dark mode support
+- [ ] Data persistence dengan database
+- [ ] Advanced form validation
+- [ ] Export data functionality
+- [ ] Multi-language support
+
+## 🤝 Contributing
+
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+---
+
+**Dashboard Registrasi Universitas** - Sistem registrasi mahasiswa modern dan responsif 🎓
