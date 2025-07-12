@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Toaster } from "@/components/ui/toaster"
 import { StudentRegistrationForm } from "@/components/student-registration-form"
 import { GreetingGeneratorForm } from "@/components/greeting-generator-form"
+// import { StudentListManager } from "@/components/student-list-manager" // Temporarily removed due to missing module
 import {
   GraduationCap,
   UserPlus,
@@ -17,8 +18,10 @@ import {
   Bell,
   User,
   Home,
-  Settings
+  Settings,
+  FileSpreadsheet
 } from "lucide-react"
+import { StudentListManager } from "@/components/student-list-manager"
 
 export default function UniversityDashboard() {
   const [activeMenu, setActiveMenu] = useState("registrasi")
@@ -36,6 +39,12 @@ export default function UniversityDashboard() {
       title: "Generator Sapaan",
       description: "Buat sapaan personal untuk mahasiswa yang terdaftar",
       icon: MessageCircle,
+    },
+    {
+      id: "csv-manager",
+      title: "Kelola Data CSV",
+      description: "Upload CSV dan pilih mahasiswa untuk dikirim",
+      icon: FileSpreadsheet,
     },
   ]
 
@@ -216,6 +225,7 @@ export default function UniversityDashboard() {
               <CardContent className="p-8">
                 {activeMenu === "registrasi" && <StudentRegistrationForm />}
                 {activeMenu === "sapaan" && <GreetingGeneratorForm />}
+                {activeMenu === "csv-manager" && <StudentListManager />}
               </CardContent>
             </Card>
           </div>
