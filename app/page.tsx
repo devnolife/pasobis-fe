@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Toaster } from "@/components/ui/toaster"
 import { StudentRegistrationForm } from "@/components/student-registration-form"
 import { GreetingGeneratorForm } from "@/components/greeting-generator-form"
-import { StudentListManager } from "@/components/student-list-manager"
-import { FileAnalyzerUpload } from "@/components/file-analyzer-upload"
+import { WhatsappBroadcastManager } from "@/components/whatsapp-broadcast-manager"
 import {
   GraduationCap,
   UserPlus,
@@ -21,7 +20,7 @@ import {
   Home,
   Settings,
   FileSpreadsheet,
-  BarChart3
+  MessageSquare
 } from "lucide-react"
 
 export default function UniversityDashboard() {
@@ -42,16 +41,10 @@ export default function UniversityDashboard() {
       icon: MessageCircle,
     },
     {
-      id: "csv-manager",
-      title: "Kelola Data CSV",
-      description: "Upload CSV dan pilih mahasiswa untuk dikirim",
-      icon: FileSpreadsheet,
-    },
-    {
-      id: "field-analyzer",
-      title: "Analisis Field Data",
-      description: "Analisis struktur file Excel/CSV untuk data mahasiswa",
-      icon: BarChart3,
+      id: "whatsapp-broadcast",
+      title: "Broadcast WhatsApp",
+      description: "Upload file dan kirim pesan WhatsApp ke mahasiswa secara otomatis",
+      icon: MessageSquare,
     },
   ]
 
@@ -232,8 +225,7 @@ export default function UniversityDashboard() {
               <CardContent className="p-8">
                 {activeMenu === "registrasi" && <StudentRegistrationForm />}
                 {activeMenu === "sapaan" && <GreetingGeneratorForm />}
-                {activeMenu === "csv-manager" && <StudentListManager />}
-                {activeMenu === "field-analyzer" && <FileAnalyzerUpload />}
+                {activeMenu === "whatsapp-broadcast" && <WhatsappBroadcastManager />}
               </CardContent>
             </Card>
           </div>
