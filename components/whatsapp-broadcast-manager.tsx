@@ -30,8 +30,7 @@ import {
   Clock,
   Hash
 } from "lucide-react"
-import { parseXLSX, ParsedFileData } from "@/lib/xlsx-parser"
-import { parseCSV } from "@/lib/field-detector"
+import { parseXLSX, parseCSVFile, ParsedFileData } from "@/lib/xlsx-parser"
 import { analyzeFileStructure, FileAnalysisResult } from "@/lib/field-analyzer"
 
 interface Student {
@@ -107,9 +106,9 @@ export function WhatsappBroadcastManager() {
         throw new Error('File tidak valid')
       }
 
-      // Check file size (max 50MB to prevent memory issues)
-      if (file.size > 50 * 1024 * 1024) {
-        throw new Error('File terlalu besar. Maksimal 50MB.')
+      // Check file size (max 10MB to prevent memory issues)
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('File terlalu besar. Maksimal 10MB.')
       }
 
       let headers: string[] = []
@@ -118,34 +117,26 @@ export function WhatsappBroadcastManager() {
       const fileExtension = file.name.split('.').pop()?.toLowerCase()
       console.log('File extension:', fileExtension)
 
-      if (fileExtension === 'csv') {
-        try {
-          const text = await file.text()
-          console.log('CSV text length:', text.length)
+      // Use centralized file parsing
+      try {
+        let parsedData: ParsedFileData
 
-          if (!text || text.trim().length === 0) {
-            throw new Error('File CSV kosong')
-          }
-
-          const csvResult = parseCSV(text)
-          headers = csvResult.headers
-          data = csvResult.data
-        } catch (csvError) {
-          console.error('CSV parsing error:', csvError)
-          throw new Error('Gagal memproses file CSV: ' + (csvError instanceof Error ? csvError.message : 'Format tidak valid'))
-        }
-      } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        try {
+        if (fileExtension === 'csv') {
+          console.log('Processing CSV file...')
+          parsedData = await parseCSVFile(file)
+        } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
           console.log('Processing Excel file...')
-          const xlsxResult = await parseXLSX(file)
-          headers = xlsxResult.headers
-          data = xlsxResult.data
-        } catch (xlsxError) {
-          console.error('XLSX parsing error:', xlsxError)
-          throw new Error('Gagal memproses file Excel: ' + (xlsxError instanceof Error ? xlsxError.message : 'Format tidak valid'))
+          parsedData = await parseXLSX(file)
+        } else {
+          throw new Error('Format file tidak didukung. Gunakan .csv, .xlsx, atau .xls')
         }
-      } else {
-        throw new Error('Format file tidak didukung. Gunakan .csv, .xlsx, atau .xls')
+
+        headers = parsedData.headers
+        data = parsedData.data
+
+      } catch (parseError) {
+        console.error('File parsing error:', parseError)
+        throw new Error('Gagal memproses file: ' + (parseError instanceof Error ? parseError.message : 'Format tidak valid'))
       }
 
       if (!headers || headers.length === 0) {
@@ -156,22 +147,37 @@ export function WhatsappBroadcastManager() {
         throw new Error('File tidak memiliki data')
       }
 
-      // Limit data to prevent memory issues
-      if (data.length > 10000) {
+      // Limit data to prevent memory issues (reduced limit)
+      if (data.length > 5000) {
         toast({
           title: "Peringatan",
-          description: `File memiliki ${data.length} baris. Hanya 10.000 baris pertama yang akan diproses.`,
+          description: `File memiliki ${data.length} baris. Hanya 5.000 baris pertama yang akan diproses untuk menghindari crash.`,
         })
-        data = data.slice(0, 10000)
+        data = data.slice(0, 5000)
       }
 
       console.log('Headers:', headers)
       console.log('Data rows:', data.length)
 
-      // Analyze file structure with error handling
+      // Add memory cleanup before heavy processing
+      if (typeof window !== 'undefined' && window.gc) {
+        window.gc()
+      }
+
+      // Analyze file structure with better error handling
       let analysis: FileAnalysisResult
       try {
-        analysis = analyzeFileStructure(headers, data, file.name, file.size)
+        // Use setTimeout to prevent blocking UI
+        analysis = await new Promise((resolve, reject) => {
+          setTimeout(() => {
+            try {
+              const result = analyzeFileStructure(headers, data, file.name, file.size)
+              resolve(result)
+            } catch (error) {
+              reject(error)
+            }
+          }, 100)
+        })
         setAnalysisResult(analysis)
       } catch (analysisError) {
         console.error('Analysis error:', analysisError)
@@ -225,31 +231,45 @@ export function WhatsappBroadcastManager() {
         throw new Error('Kolom "nomor_hp" tidak ditemukan. Pastikan file memiliki kolom nomor HP.')
       }
 
-      // Transform data to students format with error handling
+      // Transform data to students format with better error handling and batching
       const studentsData: Student[] = []
+      const batchSize = 100 // Process in smaller batches
 
-      for (let index = 0; index < data.length; index++) {
-        try {
-          const row = data[index]
-          const nama = (row[detectedFields.nama] || '').toString().trim()
-          const nomor_hp = (row[detectedFields.nomor_hp] || '').toString().trim()
+      for (let batchStart = 0; batchStart < data.length; batchStart += batchSize) {
+        const batchEnd = Math.min(batchStart + batchSize, data.length)
 
-          if (nama.length > 0 && nomor_hp.length > 0) {
-            const prodi_lulus = row[detectedFields.prodi_lulus]
-            studentsData.push({
-              id: `student-${index}`,
-              nama,
-              nomor_hp,
-              pilihan1: (row[detectedFields.pilihan1] || '').toString().trim(),
-              pilihan2: (row[detectedFields.pilihan2] || '').toString().trim(),
-              pilihan3: (row[detectedFields.pilihan3] || '').toString().trim(),
-              prodi_lulus: prodi_lulus ? prodi_lulus.toString().trim() : undefined,
-              selected: true,
-              status: 'pending' as const
-            })
+        for (let index = batchStart; index < batchEnd; index++) {
+          try {
+            const row = data[index]
+            if (!row || row.length === 0) continue
+
+            const nama = (row[detectedFields.nama] || '').toString().trim()
+            const nomor_hp = (row[detectedFields.nomor_hp] || '').toString().trim()
+
+            // More lenient validation
+            if (nama.length > 0 && nomor_hp.length > 0) {
+              const prodi_lulus = row[detectedFields.prodi_lulus]
+              studentsData.push({
+                id: `student-${index}`,
+                nama,
+                nomor_hp,
+                pilihan1: (row[detectedFields.pilihan1] || '').toString().trim(),
+                pilihan2: (row[detectedFields.pilihan2] || '').toString().trim(),
+                pilihan3: (row[detectedFields.pilihan3] || '').toString().trim(),
+                prodi_lulus: prodi_lulus ? prodi_lulus.toString().trim() : undefined,
+                selected: true,
+                status: 'pending' as const
+              })
+            }
+          } catch (rowError) {
+            console.warn(`Error processing row ${index}:`, rowError)
+            // Continue processing other rows
           }
-        } catch (rowError) {
-          console.warn(`Error processing row ${index}:`, rowError)
+        }
+
+        // Allow UI to breathe between batches
+        if (batchEnd < data.length) {
+          await new Promise(resolve => setTimeout(resolve, 10))
         }
       }
 
@@ -257,12 +277,14 @@ export function WhatsappBroadcastManager() {
         throw new Error('Tidak ada data mahasiswa yang valid ditemukan. Pastikan file memiliki data nama dan nomor HP.')
       }
 
-      console.log('Students data:', studentsData.length, 'valid students')
-
       setStudents(studentsData)
       setFilteredStudents(studentsData)
       setSelectedCount(studentsData.length)
       setCurrentStep('preview')
+
+      // Clear heavy objects from memory
+      data.length = 0
+      headers.length = 0
 
       toast({
         title: "File berhasil diupload",
@@ -272,21 +294,44 @@ export function WhatsappBroadcastManager() {
     } catch (error) {
       console.error('Error processing file:', error)
 
-      // Reset state on error
+      // Reset state on error and cleanup
       setStudents([])
       setFilteredStudents([])
       setSelectedCount(0)
       setAnalysisResult(null)
+      setUploadedFile(null)
+
+      // More detailed error messages
+      let errorMessage = 'Gagal memproses file. Periksa format file Anda.'
+
+      if (error instanceof Error) {
+        if (error.message.includes('memory') || error.message.includes('heap')) {
+          errorMessage = 'File terlalu besar untuk diproses. Coba dengan file yang lebih kecil (<5MB).'
+        } else if (error.message.includes('format') || error.message.includes('parse')) {
+          errorMessage = 'Format file tidak valid. Pastikan menggunakan file CSV atau Excel yang benar.'
+        } else if (error.message.includes('column') || error.message.includes('header')) {
+          errorMessage = 'Struktur file tidak sesuai. Pastikan file memiliki kolom nama dan nomor HP.'
+        } else {
+          errorMessage = error.message
+        }
+      }
 
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : 'Gagal memproses file. Periksa format file Anda.',
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
       setIsUploading(false)
+
+      // Force garbage collection if available
+      if (typeof window !== 'undefined' && window.gc) {
+        setTimeout(() => {
+          window.gc?.()
+        }, 1000)
+      }
     }
-  }, [toast])
+  }, [toast, isUploading])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -294,7 +339,8 @@ export function WhatsappBroadcastManager() {
     const files = Array.from(e.dataTransfer.files)
     if (files.length > 0) {
       const file = files[0]
-      // Validate file
+
+      // Enhanced validation
       const validExtensions = ['csv', 'xlsx', 'xls']
       const fileExtension = file.name.split('.').pop()?.toLowerCase()
 
@@ -307,10 +353,21 @@ export function WhatsappBroadcastManager() {
         return
       }
 
-      if (file.size > 10 * 1024 * 1024) { // 10MB
+      // Reduced file size limit to prevent memory issues
+      if (file.size > 5 * 1024 * 1024) { // 5MB
         toast({
           title: "File terlalu besar",
-          description: "Maksimal ukuran file adalah 10MB",
+          description: "Maksimal ukuran file adalah 5MB untuk menghindari crash",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Additional validation for empty files
+      if (file.size === 0) {
+        toast({
+          title: "File kosong",
+          description: "File yang diupload tidak memiliki konten",
           variant: "destructive",
         })
         return
@@ -334,7 +391,8 @@ export function WhatsappBroadcastManager() {
     const files = e.target.files
     if (files && files.length > 0) {
       const file = files[0]
-      // Validate file
+
+      // Enhanced validation
       const validExtensions = ['csv', 'xlsx', 'xls']
       const fileExtension = file.name.split('.').pop()?.toLowerCase()
 
@@ -344,15 +402,29 @@ export function WhatsappBroadcastManager() {
           description: "Gunakan file .csv, .xlsx, atau .xls",
           variant: "destructive",
         })
+        // Clear the input
+        e.target.value = ''
         return
       }
 
-      if (file.size > 10 * 1024 * 1024) { // 10MB
+      // Reduced file size limit
+      if (file.size > 5 * 1024 * 1024) { // 5MB
         toast({
           title: "File terlalu besar",
-          description: "Maksimal ukuran file adalah 10MB",
+          description: "Maksimal ukuran file adalah 5MB untuk menghindari crash",
           variant: "destructive",
         })
+        e.target.value = ''
+        return
+      }
+
+      if (file.size === 0) {
+        toast({
+          title: "File kosong",
+          description: "File yang diupload tidak memiliki konten",
+          variant: "destructive",
+        })
+        e.target.value = ''
         return
       }
 
@@ -360,17 +432,18 @@ export function WhatsappBroadcastManager() {
     }
   }
 
-  const toggleStudentSelection = (studentId: string) => {
+  const toggleStudentSelection = useCallback((studentId: string) => {
     setStudents(prev => {
       const updated = prev.map(student =>
         student.id === studentId
           ? { ...student, selected: !student.selected }
           : student
       )
-      setSelectedCount(updated.filter(s => s.selected).length)
+      const newSelectedCount = updated.filter(s => s.selected).length
+      setSelectedCount(newSelectedCount)
       return updated
     })
-  }
+  }, [])
 
   const toggleAllSelection = () => {
     const allSelected = filteredStudents.every(s => s.selected)
@@ -384,15 +457,19 @@ export function WhatsappBroadcastManager() {
     })
   }
 
-  const handleSearch = (term: string) => {
+  const handleSearch = useCallback((term: string) => {
     setSearchTerm(term)
-    const filtered = students.filter(student =>
-      student.nama.toLowerCase().includes(term.toLowerCase()) ||
-      student.nomor_hp.includes(term) ||
-      student.pilihan1.toLowerCase().includes(term.toLowerCase())
-    )
-    setFilteredStudents(filtered)
-  }
+    if (term.trim() === '') {
+      setFilteredStudents(students)
+    } else {
+      const filtered = students.filter(student =>
+        student.nama.toLowerCase().includes(term.toLowerCase()) ||
+        student.nomor_hp.includes(term) ||
+        student.pilihan1.toLowerCase().includes(term.toLowerCase())
+      )
+      setFilteredStudents(filtered)
+    }
+  }, [students])
 
   const formatMessage = (student: Student): string => {
     return broadcastSettings.message
@@ -534,7 +611,7 @@ export function WhatsappBroadcastManager() {
                       Drag & drop file atau klik untuk upload
                     </p>
                     <p className="text-gray-500">
-                      Mendukung file .xlsx, .xls, dan .csv (maksimal 10MB)
+                      Mendukung file .xlsx, .xls, dan .csv (maksimal 5MB)
                     </p>
                   </div>
                 </div>
@@ -763,8 +840,8 @@ export function WhatsappBroadcastManager() {
                 <div
                   key={student.id}
                   className={`p-4 border rounded-lg transition-colors ${student.selected
-                      ? 'bg-blue-50 border-blue-200'
-                      : 'bg-white border-gray-200'
+                    ? 'bg-blue-50 border-blue-200'
+                    : 'bg-white border-gray-200'
                     }`}
                 >
                   <div className="flex items-start gap-3">
