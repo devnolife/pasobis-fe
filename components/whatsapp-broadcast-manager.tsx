@@ -48,7 +48,6 @@ interface Student {
 interface BroadcastSettings {
   delayBetweenMessages: number // in seconds
   batchSize: number // how many numbers to send at once
-  message: string
 }
 
 export function WhatsappBroadcastManager() {
@@ -69,7 +68,6 @@ export function WhatsappBroadcastManager() {
   const [broadcastSettings, setBroadcastSettings] = useState<BroadcastSettings>({
     delayBetweenMessages: 3,
     batchSize: 10,
-    message: "Halo {nama}, terima kasih telah mendaftar. Pilihan program studi Anda: {pilihan1}, {pilihan2}, {pilihan3}."
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -472,12 +470,8 @@ export function WhatsappBroadcastManager() {
   }, [students])
 
   const formatMessage = (student: Student): string => {
-    return broadcastSettings.message
-      .replace('{nama}', student.nama)
-      .replace('{pilihan1}', student.pilihan1)
-      .replace('{pilihan2}', student.pilihan2)
-      .replace('{pilihan3}', student.pilihan3)
-      .replace('{prodi_lulus}', student.prodi_lulus || '')
+    // Function ini masih diperlukan untuk preview, tapi menggunakan template default
+    return `Halo ${student.nama}, terima kasih telah mendaftar. Pilihan program studi Anda: ${student.pilihan1}, ${student.pilihan2}, ${student.pilihan3}.`
   }
 
   const sendWhatsAppMessage = async (student: Student): Promise<boolean> => {
@@ -733,13 +727,16 @@ export function WhatsappBroadcastManager() {
           </Card>
         )}
 
-        {/* Broadcast Settings */}
+        {/* Broadcast Settings - Template pesan dihapus */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="w-5 h-5" />
               Pengaturan Broadcast
             </CardTitle>
+            <CardDescription>
+              Template pesan sudah diatur otomatis oleh sistem
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -779,22 +776,14 @@ export function WhatsappBroadcastManager() {
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="message">Template Pesan</Label>
-              <Textarea
-                id="message"
-                rows={4}
-                value={broadcastSettings.message}
-                onChange={(e) => setBroadcastSettings(prev => ({
-                  ...prev,
-                  message: e.target.value
-                }))}
-                placeholder="Masukkan template pesan WhatsApp..."
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Gunakan: {"{nama}"}, {"{pilihan1}"}, {"{pilihan2}"}, {"{pilihan3}"} sebagai placeholder
-              </p>
-            </div>
+            {/* Info tentang template pesan otomatis */}
+            <Alert>
+              <MessageCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Template Pesan Otomatis:</strong><br />
+                Sistem akan mengirim pesan dengan format yang sudah ditentukan, termasuk nama mahasiswa dan pilihan program studi mereka.
+              </AlertDescription>
+            </Alert>
           </CardContent>
         </Card>
 
