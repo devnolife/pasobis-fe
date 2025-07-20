@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Toaster } from "@/components/ui/toaster"
 import { StudentRegistrationForm } from "@/components/student-registration-form"
 import { GreetingGeneratorForm } from "@/components/greeting-generator-form"
-// import { StudentListManager } from "@/components/student-list-manager" // Temporarily removed due to missing module
+import { StudentListManager } from "@/components/student-list-manager"
+import { FileAnalyzerUpload } from "@/components/file-analyzer-upload"
 import {
   GraduationCap,
   UserPlus,
@@ -19,9 +20,9 @@ import {
   User,
   Home,
   Settings,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BarChart3
 } from "lucide-react"
-import { StudentListManager } from "@/components/student-list-manager"
 
 export default function UniversityDashboard() {
   const [activeMenu, setActiveMenu] = useState("registrasi")
@@ -45,6 +46,12 @@ export default function UniversityDashboard() {
       title: "Kelola Data CSV",
       description: "Upload CSV dan pilih mahasiswa untuk dikirim",
       icon: FileSpreadsheet,
+    },
+    {
+      id: "field-analyzer",
+      title: "Analisis Field Data",
+      description: "Analisis struktur file Excel/CSV untuk data mahasiswa",
+      icon: BarChart3,
     },
   ]
 
@@ -226,6 +233,7 @@ export default function UniversityDashboard() {
                 {activeMenu === "registrasi" && <StudentRegistrationForm />}
                 {activeMenu === "sapaan" && <GreetingGeneratorForm />}
                 {activeMenu === "csv-manager" && <StudentListManager />}
+                {activeMenu === "field-analyzer" && <FileAnalyzerUpload />}
               </CardContent>
             </Card>
           </div>
