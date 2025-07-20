@@ -155,11 +155,17 @@ export function StudentListManager() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            nama: student.nama,
             number: student.number,
+            nama: student.nama,
             pilihan1: student.pilihan1,
             pilihan2: student.pilihan2,
             pilihan3: student.pilihan3,
+            programStudiDilulusi: student.prodi_lulus || student.pilihan1,
+            bayarPendaftaran: "Y",
+            biodata: "Y",
+            uploadBerkas: "Y",
+            validasi: "Y",
+            daftarUlang: "N"
           }),
         })
       )

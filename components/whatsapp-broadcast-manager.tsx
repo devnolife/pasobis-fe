@@ -43,6 +43,7 @@ interface Student {
   prodi_lulus?: string
   selected: boolean
   status?: 'pending' | 'sending' | 'sent' | 'failed'
+  error?: string
 }
 
 interface BroadcastSettings {
@@ -474,17 +475,57 @@ export function WhatsappBroadcastManager() {
     return `Halo ${student.nama}, terima kasih telah mendaftar. Pilihan program studi Anda: ${student.pilihan1}, ${student.pilihan2}, ${student.pilihan3}.`
   }
 
-  const sendWhatsAppMessage = async (student: Student): Promise<boolean> => {
+  // Interface untuk response API WhatsApp
+  interface WhatsAppApiResponse {
+    success?: boolean
+    message?: string
+    waResponse?: string
+    error?: string
+    statusCode?: number
+  }
+
+  const sendWhatsAppMessage = async (student: Student): Promise<{ success: boolean; error?: string }> => {
     try {
       const message = formatMessage(student)
-      // Simulate API call - replace with actual WhatsApp API
-      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Simulate 90% success rate
-      return Math.random() > 0.1
+      // Prepare payload untuk API
+      const payload = {
+        number: student.nomor_hp,
+        nama: student.nama,
+        message: message,
+        pilihan1: student.pilihan1,
+        pilihan2: student.pilihan2,
+        pilihan3: student.pilihan3,
+        prodi_lulus: student.prodi_lulus
+      }
+
+      // Ganti dengan URL API WhatsApp yang sebenarnya
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data: WhatsAppApiResponse = await response.json()
+
+      if (response.ok && data.success) {
+        console.log(`Pesan berhasil dikirim ke ${student.nama}:`, data.waResponse)
+        return { success: true }
+      } else {
+        console.error(`Gagal mengirim pesan ke ${student.nama}:`, data.message || data.error)
+        return {
+          success: false,
+          error: Array.isArray(data.message) ? data.message.join(', ') : data.message || data.error || 'Unknown error'
+        }
+      }
     } catch (error) {
-      console.error('Error sending message:', error)
-      return false
+      console.error('Error sending message to', student.nama, ':', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      }
     }
   }
 
@@ -504,50 +545,57 @@ export function WhatsappBroadcastManager() {
     setCurrentBatchIndex(0)
     setCurrentStep('broadcast')
 
-    const batches = []
-    for (let i = 0; i < selectedStudents.length; i += broadcastSettings.batchSize) {
-      batches.push(selectedStudents.slice(i, i + broadcastSettings.batchSize))
-    }
+    let sentCount = 0
+    let failedCount = 0
 
-    for (let batchIndex = 0; batchIndex < batches.length && !broadcastPaused; batchIndex++) {
-      setCurrentBatchIndex(batchIndex + 1)
-      const batch = batches[batchIndex]
+    // Kirim pesan satu per satu (sequential) untuk memastikan tidak ada rate limiting
+    for (let i = 0; i < selectedStudents.length && !broadcastPaused; i++) {
+      const student = selectedStudents[i]
 
-      // Process batch
-      const batchPromises = batch.map(async (student) => {
-        setStudents(prev => prev.map(s =>
-          s.id === student.id ? { ...s, status: 'sending' } : s
-        ))
+      // Update status ke sending
+      setStudents(prev => prev.map(s =>
+        s.id === student.id ? { ...s, status: 'sending' } : s
+      ))
 
-        const success = await sendWhatsAppMessage(student)
+      // Kirim pesan dan tunggu response
+      const result = await sendWhatsAppMessage(student)
 
-        setStudents(prev => prev.map(s =>
-          s.id === student.id ? {
-            ...s,
-            status: success ? 'sent' : 'failed'
-          } : s
-        ))
+      // Update status berdasarkan response
+      setStudents(prev => prev.map(s =>
+        s.id === student.id ? {
+          ...s,
+          status: result.success ? 'sent' : 'failed',
+          error: result.error
+        } : s
+      ))
 
-        return success
-      })
-
-      await Promise.all(batchPromises)
+      // Update counters
+      if (result.success) {
+        sentCount++
+      } else {
+        failedCount++
+        console.error(`Gagal mengirim ke ${student.nama}: ${result.error}`)
+      }
 
       // Update progress
-      const completedStudents = (batchIndex + 1) * broadcastSettings.batchSize
-      const progress = Math.min((completedStudents / selectedStudents.length) * 100, 100)
+      const progress = ((i + 1) / selectedStudents.length) * 100
       setBroadcastProgress(progress)
 
-      // Wait between batches (except for the last batch)
-      if (batchIndex < batches.length - 1 && !broadcastPaused) {
+      // Delay antara pesan (kecuali pesan terakhir)
+      if (i < selectedStudents.length - 1 && !broadcastPaused) {
         await new Promise(resolve => setTimeout(resolve, broadcastSettings.delayBetweenMessages * 1000))
+      }
+
+      // Check pause status setiap iterasi
+      if (broadcastPaused) {
+        // Tunggu sampai unpause
+        while (broadcastPaused) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
       }
     }
 
     setIsBroadcasting(false)
-
-    const sentCount = students.filter(s => s.status === 'sent').length
-    const failedCount = students.filter(s => s.status === 'failed').length
 
     toast({
       title: "Broadcast selesai",
@@ -756,9 +804,12 @@ export function WhatsappBroadcastManager() {
                     }))}
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pesan akan dikirim satu per satu dengan delay ini
+                </p>
               </div>
               <div>
-                <Label htmlFor="batch">Batch size (nomor per batch)</Label>
+                <Label htmlFor="batch">Batch size (tidak digunakan)</Label>
                 <div className="flex items-center gap-2">
                   <Hash className="w-4 h-4 text-gray-400" />
                   <Input
@@ -767,12 +818,13 @@ export function WhatsappBroadcastManager() {
                     min="1"
                     max="50"
                     value={broadcastSettings.batchSize}
-                    onChange={(e) => setBroadcastSettings(prev => ({
-                      ...prev,
-                      batchSize: parseInt(e.target.value) || 10
-                    }))}
+                    disabled
+                    className="bg-gray-100"
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pesan dikirim secara berurutan untuk menghindari rate limiting
+                </p>
               </div>
             </div>
 
@@ -850,11 +902,19 @@ export function WhatsappBroadcastManager() {
                                   student.status === 'sending' ? 'secondary' : 'outline'
                             }
                           >
-                            {student.status}
+                            {student.status === 'pending' && 'Menunggu'}
+                            {student.status === 'sending' && 'Mengirim'}
+                            {student.status === 'sent' && 'Berhasil'}
+                            {student.status === 'failed' && 'Gagal'}
                           </Badge>
                         )}
                       </div>
                       <p className="text-sm text-gray-600">{student.nomor_hp}</p>
+                      {student.error && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Error: {student.error}
+                        </p>
+                      )}
                       <div className="mt-2 flex flex-wrap gap-1">
                         {student.pilihan1 && (
                           <Badge variant="outline" className="text-xs">
@@ -1000,9 +1060,14 @@ export function WhatsappBroadcastManager() {
                   key={student.id}
                   className="flex items-center justify-between p-3 border rounded-lg"
                 >
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium">{student.nama}</div>
                     <div className="text-sm text-gray-600">{student.nomor_hp}</div>
+                    {student.error && (
+                      <div className="text-xs text-red-600 mt-1 max-w-xs truncate">
+                        {student.error}
+                      </div>
+                    )}
                   </div>
                   <Badge
                     variant={

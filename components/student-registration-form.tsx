@@ -55,7 +55,19 @@ export function StudentRegistrationForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          number: data.number,
+          nama: data.nama,
+          pilihan1: data.pilihan1,
+          pilihan2: data.pilihan2,
+          pilihan3: data.pilihan3,
+          programStudiDilulusi: data.pilihan1,
+          bayarPendaftaran: "Y",
+          biodata: "Y",
+          uploadBerkas: "Y",
+          validasi: "Y",
+          daftarUlang: "N"
+        }),
       })
 
       if (response.ok) {

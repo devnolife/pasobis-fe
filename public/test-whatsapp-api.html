@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test WhatsApp API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test WhatsApp API</h1>
+    
+    <form id="testForm">
+        <div class="form-group">
+            <label for="number">Nomor HP:</label>
+            <input type="text" id="number" value="08123456789" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="nama">Nama:</label>
+            <input type="text" id="nama" value="John Doe" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="message">Pesan:</label>
+            <textarea id="message" rows="4" required>Halo John Doe, terima kasih telah mendaftar. Pilihan program studi Anda: Informatika, Sistem Informasi, Teknik Komputer.</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="pilihan1">Pilihan 1:</label>
+            <input type="text" id="pilihan1" value="Informatika" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="pilihan2">Pilihan 2:</label>
+            <input type="text" id="pilihan2" value="Sistem Informasi" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="pilihan3">Pilihan 3:</label>
+            <input type="text" id="pilihan3" value="Teknik Komputer" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="prodi_lulus">Prodi Lulus:</label>
+            <input type="text" id="prodi_lulus" value="Informatika">
+        </div>
+        
+        <button type="submit">Test API</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Mengirim request...';
+            resultDiv.className = 'result';
+            
+            const formData = {
+                number: document.getElementById('number').value,
+                nama: document.getElementById('nama').value,
+                message: document.getElementById('message').value,
+                pilihan1: document.getElementById('pilihan1').value,
+                pilihan2: document.getElementById('pilihan2').value,
+                pilihan3: document.getElementById('pilihan3').value,
+                prodi_lulus: document.getElementById('prodi_lulus').value
+            };
+            
+            try {
+                const response = await fetch('/api/whatsapp/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ ERROR (${response.status})\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ NETWORK ERROR\n\n${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html> 
