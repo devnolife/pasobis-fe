@@ -28,12 +28,7 @@ export default function UniversityDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const menuItems = [
-    {
-      id: "registrasi",
-      title: "Registrasi Mahasiswa",
-      description: "Daftarkan mahasiswa baru dengan pilihan program studi",
-      icon: UserPlus,
-    },
+
     {
       id: "sapaan",
       title: "Generator Sapaan",
