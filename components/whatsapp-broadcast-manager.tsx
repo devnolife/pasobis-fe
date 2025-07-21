@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -73,6 +73,20 @@ export function WhatsappBroadcastManager() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  // Sync filteredStudents with students state and search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredStudents(students)
+    } else {
+      const filtered = students.filter(student =>
+        student.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.nomor_hp.includes(searchTerm) ||
+        student.pilihan1.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      setFilteredStudents(filtered)
+    }
+  }, [students, searchTerm])
 
   // Cleanup function to prevent memory leaks
   const cleanup = useCallback(() => {
@@ -445,12 +459,17 @@ export function WhatsappBroadcastManager() {
   }, [])
 
   const toggleAllSelection = () => {
-    const allSelected = filteredStudents.every(s => s.selected)
+    const allFilteredSelected = filteredStudents.every(s => s.selected)
+    const filteredIds = new Set(filteredStudents.map(s => s.id))
+
     setStudents(prev => {
-      const updated = prev.map(student => ({
-        ...student,
-        selected: !allSelected
-      }))
+      const updated = prev.map(student => {
+        // Only toggle students that are currently filtered/visible
+        if (filteredIds.has(student.id)) {
+          return { ...student, selected: !allFilteredSelected }
+        }
+        return student
+      })
       setSelectedCount(updated.filter(s => s.selected).length)
       return updated
     })
@@ -458,66 +477,76 @@ export function WhatsappBroadcastManager() {
 
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term)
-    if (term.trim() === '') {
-      setFilteredStudents(students)
-    } else {
-      const filtered = students.filter(student =>
-        student.nama.toLowerCase().includes(term.toLowerCase()) ||
-        student.nomor_hp.includes(term) ||
-        student.pilihan1.toLowerCase().includes(term.toLowerCase())
-      )
-      setFilteredStudents(filtered)
-    }
-  }, [students])
+  }, [])
 
   const formatMessage = (student: Student): string => {
     // Function ini masih diperlukan untuk preview, tapi menggunakan template default
     return `Halo ${student.nama}, terima kasih telah mendaftar. Pilihan program studi Anda: ${student.pilihan1}, ${student.pilihan2}, ${student.pilihan3}.`
   }
 
-  // Interface untuk response API WhatsApp
-  interface WhatsAppApiResponse {
-    success?: boolean
-    message?: string
-    waResponse?: string
-    error?: string
-    statusCode?: number
-  }
-
   const sendWhatsAppMessage = async (student: Student): Promise<{ success: boolean; error?: string }> => {
     try {
-      const message = formatMessage(student)
-
-      // Prepare payload untuk API
+      // Prepare payload untuk API eksternal sesuai format yang diminta
       const payload = {
         number: student.nomor_hp,
         nama: student.nama,
-        message: message,
         pilihan1: student.pilihan1,
         pilihan2: student.pilihan2,
         pilihan3: student.pilihan3,
-        prodi_lulus: student.prodi_lulus
+        programStudiDilulusi: student.prodi_lulus || student.pilihan1,
+        bayarPendaftaran: "Y",
+        biodata: "Y",
+        uploadBerkas: "Y",
+        validasi: "Y",
+        daftarUlang: "N"
       }
 
-      // Ganti dengan URL API WhatsApp yang sebenarnya
-      const response = await fetch('/api/whatsapp/send', {
+      // Kirim langsung ke API eksternal
+      const response = await fetch('https://passobis.if.unismuh.ac.id/sobis/send', {
         method: 'POST',
         headers: {
+          'accept': 'application/json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       })
 
-      const data: WhatsAppApiResponse = await response.json()
+      // Parse response
+      const responseText = await response.text()
+      let data: any = null
 
-      if (response.ok && data.success) {
-        console.log(`Pesan berhasil dikirim ke ${student.nama}:`, data.waResponse)
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        // Jika response bukan JSON, anggap sebagai text response
+        data = { message: responseText }
+      }
+
+      // Deteksi success berdasarkan HTTP status
+      if (response.ok && response.status >= 200 && response.status < 300) {
+        console.log(`Pesan berhasil dikirim ke ${student.nama}:`, data)
         return { success: true }
       } else {
-        console.error(`Gagal mengirim pesan ke ${student.nama}:`, data.message || data.error)
+        // Format error message
+        let errorMessage = 'Unknown error'
+
+        if (data?.message) {
+          errorMessage = Array.isArray(data.message) ? data.message.join(', ') : data.message
+        } else if (data?.error) {
+          errorMessage = data.error
+        } else {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        }
+
+        console.error(`Gagal mengirim pesan ke ${student.nama}:`, {
+          status: response.status,
+          statusText: response.statusText,
+          data: data
+        })
+
         return {
           success: false,
-          error: Array.isArray(data.message) ? data.message.join(', ') : data.message || data.error || 'Unknown error'
+          error: errorMessage
         }
       }
     } catch (error) {
@@ -862,17 +891,19 @@ export function WhatsappBroadcastManager() {
                   className="pl-10"
                 />
               </div>
-              <Button
-                variant="outline"
-                onClick={toggleAllSelection}
-                className="flex items-center gap-2"
-              >
+              <div className="flex items-center gap-2">
                 <Checkbox
+                  id="select-all"
                   checked={filteredStudents.length > 0 && filteredStudents.every(s => s.selected)}
-                  onChange={toggleAllSelection}
+                  onCheckedChange={toggleAllSelection}
                 />
-                Pilih Semua
-              </Button>
+                <Label
+                  htmlFor="select-all"
+                  className="text-sm font-medium cursor-pointer"
+                >
+                  Pilih Semua
+                </Label>
+              </div>
             </div>
 
             {/* Student List */}

@@ -57,17 +57,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse, { status: 400 })
     }
 
-    // Simulasi pengiriman WhatsApp (ganti dengan integrasi WhatsApp API yang sebenarnya)
-    console.log('Sending WhatsApp message:', {
-      to: body.number,
-      nama: body.nama,
-      message: body.message,
-      pilihan1: body.pilihan1,
-      pilihan2: body.pilihan2,
-      pilihan3: body.pilihan3,
-      prodi_lulus: body.prodi_lulus
-    })
-
     // Simulasi delay pengiriman
     await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
 
