@@ -1,4 +1,4 @@
-nama,nomor_hp,pilihan1,pilihan2,pilihan3
-Budi Santoso,08123456789,Teknik Informatika,Sistem Informasi,Manajemen
-Sari Dewi,08234567890,Kedokteran,Farmasi,Biologi
-Andi Wijaya,08345678901,Hukum,Ilmu Politik,Sosiologi
+nama,nomor_hp,pilihan1,pilihan2,pilihan3,batas_akhir_pembayaran,is_send_gen_audio
+Budi Santoso,08123456789,Teknik Informatika,Sistem Informasi,Manajemen,2024-12-31,Y
+Sari Dewi,08234567890,Kedokteran,Farmasi,Biologi,2024-12-25,N
+Andi Wijaya,08345678901,Hukum,Ilmu Politik,Sosiologi,2025-01-15,Y

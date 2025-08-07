@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import {
   Upload,
@@ -28,10 +29,16 @@ import {
   Download,
   Eye,
   Clock,
-  Hash
+  Hash,
+  Globe,
+  Zap
 } from "lucide-react"
 import { parseXLSX, parseCSVFile, ParsedFileData } from "@/lib/xlsx-parser"
 import { analyzeFileStructure, FileAnalysisResult } from "@/lib/field-analyzer"
+
+// API Endpoints
+const REST_API_ENDPOINT = "https://passobis.if.unismuh.ac.id/sobis/send"
+const GRAPHQL_ENDPOINT = "https://passobis.if.unismuh.ac.id/graphql"
 
 interface Student {
   id: string
@@ -41,6 +48,8 @@ interface Student {
   pilihan2: string
   pilihan3: string
   prodi_lulus?: string
+  batas_akhir_pembayaran?: string
+  is_send_gen_audio?: string
   selected: boolean
   status?: 'pending' | 'sending' | 'sent' | 'failed'
   error?: string
@@ -49,6 +58,7 @@ interface Student {
 interface BroadcastSettings {
   delayBetweenMessages: number // in seconds
   batchSize: number // how many numbers to send at once
+  sendMethod: 'rest-api' | 'graphql' // method for sending messages
 }
 
 export function WhatsappBroadcastManager() {
@@ -69,6 +79,7 @@ export function WhatsappBroadcastManager() {
   const [broadcastSettings, setBroadcastSettings] = useState<BroadcastSettings>({
     delayBetweenMessages: 3,
     batchSize: 10,
+    sendMethod: 'rest-api', // default to rest-api
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -82,7 +93,9 @@ export function WhatsappBroadcastManager() {
       const filtered = students.filter(student =>
         student.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.nomor_hp.includes(searchTerm) ||
-        student.pilihan1.toLowerCase().includes(searchTerm.toLowerCase())
+        student.pilihan1.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (student.batas_akhir_pembayaran && student.batas_akhir_pembayaran.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (student.is_send_gen_audio && student.is_send_gen_audio.toLowerCase().includes(searchTerm.toLowerCase()))
       )
       setFilteredStudents(filtered)
     }
@@ -230,6 +243,10 @@ export function WhatsappBroadcastManager() {
           detectedFields.pilihan3 = index
         } else if (lowerHeader.includes('prodi') || lowerHeader.includes('program')) {
           detectedFields.prodi_lulus = index
+        } else if (lowerHeader.includes('batas_akhir_pembayaran') || lowerHeader.includes('deadline') || lowerHeader.includes('batas_pembayaran')) {
+          detectedFields.batas_akhir_pembayaran = index
+        } else if (lowerHeader.includes('is_send_gen_audio') || lowerHeader.includes('audio') || lowerHeader.includes('send_audio')) {
+          detectedFields.is_send_gen_audio = index
         }
       })
 
@@ -262,6 +279,9 @@ export function WhatsappBroadcastManager() {
             // More lenient validation
             if (nama.length > 0 && nomor_hp.length > 0) {
               const prodi_lulus = row[detectedFields.prodi_lulus]
+              const batas_akhir_pembayaran = row[detectedFields.batas_akhir_pembayaran]
+              const is_send_gen_audio = row[detectedFields.is_send_gen_audio]
+
               studentsData.push({
                 id: `student-${index}`,
                 nama,
@@ -270,6 +290,8 @@ export function WhatsappBroadcastManager() {
                 pilihan2: (row[detectedFields.pilihan2] || '').toString().trim(),
                 pilihan3: (row[detectedFields.pilihan3] || '').toString().trim(),
                 prodi_lulus: prodi_lulus ? prodi_lulus.toString().trim() : undefined,
+                batas_akhir_pembayaran: batas_akhir_pembayaran ? batas_akhir_pembayaran.toString().trim() : undefined,
+                is_send_gen_audio: is_send_gen_audio ? is_send_gen_audio.toString().trim() : undefined,
                 selected: true,
                 status: 'pending' as const
               })
@@ -486,6 +508,94 @@ export function WhatsappBroadcastManager() {
 
   const sendWhatsAppMessage = async (student: Student): Promise<{ success: boolean; error?: string }> => {
     try {
+      if (broadcastSettings.sendMethod === 'graphql') {
+        return await sendViaGraphQL(student)
+      } else {
+        return await sendViaRestAPI(student)
+      }
+    } catch (error) {
+      console.error('Error sending message to', student.nama, ':', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      }
+    }
+  }
+
+  const sendViaGraphQL = async (student: Student): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const mutation = `
+        mutation SendSobis($input: SendSobisInput!) {
+          sendSobis(input: $input) {
+            success
+            message
+            waResponse
+          }
+        }
+      `
+
+      const variables = {
+        input: {
+          number: student.nomor_hp,
+          nama: student.nama,
+          pilihan1: student.pilihan1,
+          pilihan2: student.pilihan2,
+          pilihan3: student.pilihan3,
+          programStudiDilulusi: student.prodi_lulus || null,
+          bayarPendaftaran: "Y",
+          biodata: "Y",
+          uploadBerkas: "Y",
+          validasi: "Y",
+          daftarUlang: "N",
+          isSendGenAudio: student.is_send_gen_audio || "N",
+        }
+      }
+
+      const requestBody = {
+        query: mutation,
+        variables,
+      }
+
+      const response = await fetch(GRAPHQL_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status} ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      // Check for GraphQL errors
+      if (result.errors) {
+        throw new Error(`GraphQL Error: ${result.errors.map((e: any) => e.message).join(', ')}`)
+      }
+
+      if (result.data?.sendSobis?.success) {
+        console.log(`GraphQL: Pesan berhasil dikirim ke ${student.nama}`)
+        return { success: true }
+      } else {
+        const errorMessage = result.data?.sendSobis?.message || "Pengiriman pesan gagal"
+        return {
+          success: false,
+          error: errorMessage
+        }
+      }
+    } catch (error) {
+      console.error('GraphQL Error sending message to', student.nama, ':', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'GraphQL request failed'
+      }
+    }
+  }
+
+  const sendViaRestAPI = async (student: Student): Promise<{ success: boolean; error?: string }> => {
+    try {
       // Prepare payload untuk API eksternal sesuai format yang diminta
       const payload = {
         number: student.nomor_hp,
@@ -498,11 +608,13 @@ export function WhatsappBroadcastManager() {
         biodata: "Y",
         uploadBerkas: "Y",
         validasi: "Y",
-        daftarUlang: "N"
+        daftarUlang: "N",
+        batas_akhir_pembayaran: student.batas_akhir_pembayaran || "",
+        is_send_gen_audio: student.is_send_gen_audio || "N"
       }
 
       // Kirim langsung ke API eksternal
-      const response = await fetch('https://passobis.if.unismuh.ac.id/sobis/send', {
+      const response = await fetch(REST_API_ENDPOINT, {
         method: 'POST',
         headers: {
           'accept': 'application/json',
@@ -524,7 +636,7 @@ export function WhatsappBroadcastManager() {
 
       // Deteksi success berdasarkan HTTP status
       if (response.ok && response.status >= 200 && response.status < 300) {
-        console.log(`Pesan berhasil dikirim ke ${student.nama}:`, data)
+        console.log(`REST API: Pesan berhasil dikirim ke ${student.nama}:`, data)
         return { success: true }
       } else {
         // Format error message
@@ -538,7 +650,7 @@ export function WhatsappBroadcastManager() {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`
         }
 
-        console.error(`Gagal mengirim pesan ke ${student.nama}:`, {
+        console.error(`REST API: Gagal mengirim pesan ke ${student.nama}:`, {
           status: response.status,
           statusText: response.statusText,
           data: data
@@ -550,10 +662,10 @@ export function WhatsappBroadcastManager() {
         }
       }
     } catch (error) {
-      console.error('Error sending message to', student.nama, ':', error)
+      console.error('REST API Error sending message to', student.nama, ':', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Network error'
+        error: error instanceof Error ? error.message : 'REST API request failed'
       }
     }
   }
@@ -628,7 +740,7 @@ export function WhatsappBroadcastManager() {
 
     toast({
       title: "Broadcast selesai",
-      description: `${sentCount} pesan berhasil dikirim, ${failedCount} gagal`,
+      description: `${sentCount} pesan berhasil dikirim, ${failedCount} gagal (menggunakan ${broadcastSettings.sendMethod === 'rest-api' ? 'REST API' : 'GraphQL'})`,
     })
   }
 
@@ -720,6 +832,8 @@ export function WhatsappBroadcastManager() {
               <li>Kolom "nama" atau "name" untuk nama mahasiswa</li>
               <li>Kolom "nomor_hp", "no_hp", "phone" untuk nomor WhatsApp</li>
               <li>Kolom "pilihan1", "pilihan2", "pilihan3" untuk pilihan program studi</li>
+              <li>Kolom "batas_akhir_pembayaran" atau "deadline" untuk batas waktu pembayaran (opsional)</li>
+              <li>Kolom "is_send_gen_audio" atau "send_audio" untuk pengaturan audio (opsional)</li>
               <li>Nomor HP harus dalam format yang valid (contoh: 08123456789)</li>
             </ul>
             <div className="mt-3 flex gap-2">
@@ -816,7 +930,44 @@ export function WhatsappBroadcastManager() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="sendMethod">Metode Pengiriman</Label>
+                <div className="flex items-center gap-2">
+                  {broadcastSettings.sendMethod === 'rest-api' ? (
+                    <Globe className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <Zap className="w-4 h-4 text-purple-500" />
+                  )}
+                  <Select
+                    value={broadcastSettings.sendMethod}
+                    onValueChange={(value: 'rest-api' | 'graphql') =>
+                      setBroadcastSettings(prev => ({
+                        ...prev,
+                        sendMethod: value
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rest-api">
+                        REST API (Default)
+                      </SelectItem>
+                      <SelectItem value="graphql">
+                        GraphQL
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {broadcastSettings.sendMethod === 'rest-api'
+                    ? 'Menggunakan REST API endpoint'
+                    : 'Menggunakan GraphQL mutation seperti di form individual'
+                  }
+                </p>
+              </div>
               <div>
                 <Label htmlFor="delay">Delay antar pesan (detik)</Label>
                 <div className="flex items-center gap-2">
@@ -857,14 +1008,33 @@ export function WhatsappBroadcastManager() {
               </div>
             </div>
 
-            {/* Info tentang template pesan otomatis */}
-            <Alert>
-              <MessageCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Template Pesan Otomatis:</strong><br />
-                Sistem akan mengirim pesan dengan format yang sudah ditentukan, termasuk nama mahasiswa dan pilihan program studi mereka.
-              </AlertDescription>
-            </Alert>
+            {/* Info tentang template pesan otomatis dan metode pengiriman */}
+            <div className="space-y-4">
+              <Alert>
+                <MessageCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Template Pesan Otomatis:</strong><br />
+                  Sistem akan mengirim pesan dengan format yang sudah ditentukan, termasuk nama mahasiswa dan pilihan program studi mereka.
+                </AlertDescription>
+              </Alert>
+
+              <Alert className={broadcastSettings.sendMethod === 'graphql' ? 'border-purple-200 bg-purple-50' : 'border-blue-200 bg-blue-50'}>
+                {broadcastSettings.sendMethod === 'rest-api' ? (
+                  <Globe className="h-4 w-4 text-blue-600" />
+                ) : (
+                  <Zap className="h-4 w-4 text-purple-600" />
+                )}
+                <AlertDescription>
+                  <strong>
+                    {broadcastSettings.sendMethod === 'rest-api' ? 'REST API Mode:' : 'GraphQL Mode:'}
+                  </strong><br />
+                  {broadcastSettings.sendMethod === 'rest-api'
+                    ? 'Menggunakan REST API endpoint langsung ke server SOBIS. Metode ini adalah default dan biasanya lebih cepat.'
+                    : 'Menggunakan GraphQL mutation yang sama seperti form pengiriman individual. Memberikan response yang lebih terstruktur.'
+                  }
+                </AlertDescription>
+              </Alert>
+            </div>
           </CardContent>
         </Card>
 
@@ -962,6 +1132,17 @@ export function WhatsappBroadcastManager() {
                             3. {student.pilihan3}
                           </Badge>
                         )}
+                        {student.batas_akhir_pembayaran && (
+                          <Badge variant="secondary" className="text-xs">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {student.batas_akhir_pembayaran}
+                          </Badge>
+                        )}
+                        {student.is_send_gen_audio && student.is_send_gen_audio !== "N" && (
+                          <Badge variant="default" className="text-xs">
+                            🔊 Audio: {student.is_send_gen_audio}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <Button
@@ -1003,8 +1184,12 @@ export function WhatsappBroadcastManager() {
             disabled={selectedCount === 0}
             className="flex items-center gap-2"
           >
-            <Send className="w-4 h-4" />
-            Mulai Broadcast ({selectedCount} mahasiswa)
+            {broadcastSettings.sendMethod === 'rest-api' ? (
+              <Globe className="w-4 h-4" />
+            ) : (
+              <Zap className="w-4 h-4" />
+            )}
+            Mulai Broadcast - {broadcastSettings.sendMethod === 'rest-api' ? 'REST API' : 'GraphQL'} ({selectedCount} mahasiswa)
           </Button>
         </div>
       </div>
@@ -1020,6 +1205,19 @@ export function WhatsappBroadcastManager() {
             <CardTitle className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5" />
               Broadcast WhatsApp Sedang Berjalan
+              <Badge variant="outline" className="ml-2 flex items-center gap-1">
+                {broadcastSettings.sendMethod === 'rest-api' ? (
+                  <>
+                    <Globe className="w-3 h-3" />
+                    REST API
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3 h-3" />
+                    GraphQL
+                  </>
+                )}
+              </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1094,6 +1292,16 @@ export function WhatsappBroadcastManager() {
                   <div className="flex-1">
                     <div className="font-medium">{student.nama}</div>
                     <div className="text-sm text-gray-600">{student.nomor_hp}</div>
+                    {(student.batas_akhir_pembayaran || student.is_send_gen_audio) && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {student.batas_akhir_pembayaran && (
+                          <span className="mr-2">📅 {student.batas_akhir_pembayaran}</span>
+                        )}
+                        {student.is_send_gen_audio && student.is_send_gen_audio !== "N" && (
+                          <span>🔊 {student.is_send_gen_audio}</span>
+                        )}
+                      </div>
+                    )}
                     {student.error && (
                       <div className="text-xs text-red-600 mt-1 max-w-xs truncate">
                         {student.error}

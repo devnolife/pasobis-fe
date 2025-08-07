@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { StudentRegistrationForm } from "@/components/student-registration-form"
 import { GreetingGeneratorForm } from "@/components/greeting-generator-form"
 import { WhatsappBroadcastManager } from "@/components/whatsapp-broadcast-manager"
+import { SobisMessageSender } from "@/components/sobis-message-sender"
 import {
   GraduationCap,
   UserPlus,
@@ -20,20 +21,20 @@ import {
   Home,
   Settings,
   FileSpreadsheet,
-  MessageSquare
+  MessageSquare,
+  Send
 } from "lucide-react"
 
 export default function UniversityDashboard() {
-  const [activeMenu, setActiveMenu] = useState("registrasi")
+  const [activeMenu, setActiveMenu] = useState("sobis-sender")
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const menuItems = [
-
     {
-      id: "sapaan",
-      title: "Generator Sapaan",
-      description: "Buat sapaan personal untuk mahasiswa yang terdaftar",
-      icon: MessageCircle,
+      id: "sobis-sender",
+      title: "Kirim Pesan Individual",
+      description: "Kirim Pesan Individual individual ke calon mahasiswa",
+      icon: Send,
     },
     {
       id: "whatsapp-broadcast",
@@ -116,22 +117,6 @@ export default function UniversityDashboard() {
                       </div>
                     </button>
                   ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">
-                  Lainnya
-                </h3>
-                <div className="space-y-2">
-                  <button className="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-50 text-gray-700 transition-colors text-left">
-                    <Home className="w-5 h-5" />
-                    <span className="text-sm">Dashboard Utama</span>
-                  </button>
-                  <button className="w-full flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-50 text-gray-700 transition-colors text-left">
-                    <Settings className="w-5 h-5" />
-                    <span className="text-sm">Pengaturan</span>
-                  </button>
                 </div>
               </div>
             </div>
@@ -218,6 +203,7 @@ export default function UniversityDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8">
+                {activeMenu === "sobis-sender" && <SobisMessageSender />}
                 {activeMenu === "registrasi" && <StudentRegistrationForm />}
                 {activeMenu === "sapaan" && <GreetingGeneratorForm />}
                 {activeMenu === "whatsapp-broadcast" && <WhatsappBroadcastManager />}
